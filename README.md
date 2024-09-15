@@ -42,8 +42,8 @@ To build the web server, follow these steps:
 
 1. Clone the repository:
    ```bash
-   git clone <link>
-   cd <dir>
+   git clone git@github.com:wbccpals/nativeWeb.git
+   cd nativeWeb
    ./fasm nativeWeb.asm && ./nativeWeb
 ## technical resources
   ```bash
