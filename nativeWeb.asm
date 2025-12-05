@@ -1,13 +1,17 @@
 format ELF64 executable
 
+SYS_read equ 0
 SYS_write equ 1
+SYS_open equ 2
+SYS_close equ 3
 STD_err equ 2
 SYS_exit equ 60
 SYS_socket equ 41
+SYS_accept equ 43
 SYS_bind equ 49
 SYS_listen equ 50
-SYS_close equ 3
-SYS_accept equ 43
+
+O_RDONLY equ 0
 
 segment readable writeable
 struc strucbuilder
@@ -24,13 +28,15 @@ struc strucbuilder
    respaddr_len dd servaddr_len
    connfd dq -1
    sockfd dq -1
+   filefd dq -1
+   
    INADDR_ANY = 0
 
 
  start db "setting up webNative",10
  start_l = $ - start
  start_socket db "INFO: init socket",10
- start_scoket_l = $ - start_socket
+ start_socket_l = $ - start_socket
  error_msg db "INFO: Error!",10
  error_msg_l = $ - error_msg
  init_socket db "INFO: Init socket",10
@@ -45,14 +51,31 @@ struc strucbuilder
  served_l = $ - served
 
 
- response db "HTTP/1.1 200 OK",13,10  ;; \r\n
+ header db "HTTP/1.1 200 OK",13,10
           db "Content-Type: text/html",13,10
-          db "Connection : close",13,10
+          db "Connection: close",13,10
           db 13,10
-          db "<h1> Looks like everything working</h1>",13,10
-          db "<h2> Hello there!!</h2>"
-          db "<a href='https://youtu.be/dQw4w9WgXcQ'>here's a gift</a>",10
- response_l = $ - response
+ header_l = $ - header
+
+ ; JSON Response
+ json_header db "HTTP/1.1 200 OK",13,10
+             db "Content-Type: application/json",13,10
+             db "Connection: close",13,10
+             db 13,10
+ json_header_l = $ - json_header
+ 
+ json_body   db '{"status": "ok", "message": "hello from assembly"}', 10
+ json_body_l = $ - json_body
+
+ filename db "demo.html", 0
+ 
+ api_route db "GET /api/health"
+ api_route_len = $ - api_route
+
+ request_buffer rb 2048
+
+ file_buffer rb 4096
+ file_len dq 0
 
 segment readable executable
 entry main
@@ -131,21 +154,85 @@ recall:
     cmp rax ,0
     jl error
     mov qword[connfd], rax
+    
     mov rax , SYS_write
     mov rdi , 1
     mov rsi , served
     mov rdx, served_l
     syscall
 
-    ;; write to connfd
-    ;; response
-    mov rax, SYS_write
+    ;; READ THE REQUEST
+    mov rax, SYS_read
     mov rdi, [connfd]
-    mov rsi, response
-    mov rdx, response_l
+    mov rsi, request_buffer
+    mov rdx, 2048
+    syscall
+    
+    ;; Check for API route
+    ;; Compare request_buffer with api_route
+    mov rcx, api_route_len
+    mov rsi, request_buffer
+    mov rdi, api_route
+    repe cmpsb
+    je serve_api
+
+serve_file:
+    ;; Open the file
+    mov rax, SYS_open
+    mov rdi, filename
+    mov rsi, O_RDONLY
+    mov rdx, 0
+    syscall
+    cmp rax, 0
+    jl error
+    mov [filefd], rax
+
+    ;; Read the file
+    mov rax, SYS_read
+    mov rdi, [filefd]
+    mov rsi, file_buffer
+    mov rdx, 4096
+    syscall
+    mov [file_len], rax
+    
+    ;; Close the file
+    mov rax, SYS_close
+    mov rdi, [filefd]
     syscall
 
- cmp rax ,0
+    ;; Write header to connfd
+    mov rax, SYS_write
+    mov rdi, [connfd]
+    mov rsi, header
+    mov rdx, header_l
+    syscall
+
+    ;; Write file content to connfd
+    mov rax, SYS_write
+    mov rdi, [connfd]
+    mov rsi, file_buffer
+    mov rdx, [file_len]
+    syscall
+    
+    jmp finish_request
+
+serve_api:
+    ;; Write JSON Header
+    mov rax, SYS_write
+    mov rdi, [connfd]
+    mov rsi, json_header
+    mov rdx, json_header_l
+    syscall
+    
+    ;; Write JSON Body
+    mov rax, SYS_write
+    mov rdi, [connfd]
+    mov rsi, json_body
+    mov rdx, json_body_l
+    syscall
+    
+finish_request:
+    cmp rax ,0
     jl error
     jmp close_well
 
@@ -186,11 +273,9 @@ close :
     jmp exit
 
 close_well:
-    mov rax , SYS_close
-    mov rdi , [sockfd]
-
+    ;; We only close connfd here so we can loop back to accept
     mov rax , SYS_close
     mov rdi,[connfd]
-
     syscall
+    
     jmp recall   ;; restart after serving req
