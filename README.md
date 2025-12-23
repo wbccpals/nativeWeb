@@ -1,6 +1,6 @@
 # nativeWeb Server
 
-Welcome to the nativeWeb Server project! This repository contains a high-performance(potentially) web server implemented in flat assembly language. The goal of this project is to demonstrate the power and efficiency of low-level programming while providing a functional and lightweight web server. 
+This repository contains a high-performance(potentially) web server implemented in flat assembly language.
 
 ## Table of Contents
 
@@ -33,8 +33,6 @@ To get started with the nativeWeb Server, you'll need a few prerequisites:
 
 1. **Install FASM:**
    - I have already included a excutable fasm build in the project itself
-2. **Install a compatible C library:**
-   - You may need a C library for linking, such as `glibc` on Linux or `libc` on macOS.
 
 ## Building
 
@@ -49,5 +47,4 @@ To build the web server, follow these steps:
   ```bash
   https://flatassembler.net/
   https://chromium.googlesource.com/chromiumos/docs/+/master/constants/syscalls.md
-  extra -
-  https://www.menuetos.net/ 
+
